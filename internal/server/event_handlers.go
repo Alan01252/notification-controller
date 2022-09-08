@@ -40,6 +40,7 @@ import (
 
 	"github.com/fluxcd/notification-controller/api/v1beta1"
 	"github.com/fluxcd/notification-controller/internal/notifier"
+	"golang.org/x/exp/maps"
 )
 
 func (s *EventServer) handleEvent() func(w http.ResponseWriter, r *http.Request) {
@@ -262,6 +263,10 @@ func (s *EventServer) handleEvent() func(w http.ResponseWriter, r *http.Request)
 				} else {
 					notification.Metadata["summary"] = alert.Spec.Summary
 				}
+			}
+
+			if len(alert.GetLabels()) > 0 {
+				maps.Copy(notification.Metadata, alert.GetLabels())
 			}
 
 			go func(n notifier.Interface, e events.Event) {
