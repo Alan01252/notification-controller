@@ -67,6 +67,9 @@ spec:
                 description: HTTP/S address of the proxy
                 pattern: ^(http|https)://
                 type: string
+              relabelConfig:
+                description: Yaml for relabelling
+                type: string
               secretRef:
                 description: Secret reference containing the provider webhook URL
                   using "address" as data key

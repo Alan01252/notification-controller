@@ -38,7 +38,13 @@ func TestAlertmanager_Post(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	alertmanager, err := NewAlertmanager(ts.URL, "", nil)
+	relabelConfig := `
+source_labels: [name]
+target_label: "my_new_label"
+action: "replace"
+`
+
+	alertmanager, err := NewAlertmanager(ts.URL, "", nil, relabelConfig)
 	require.NoError(t, err)
 
 	err = alertmanager.Post(context.TODO(), testEvent())

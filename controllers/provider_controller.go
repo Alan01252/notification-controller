@@ -158,6 +158,7 @@ func (r *ProviderReconciler) validate(ctx context.Context, provider *v1beta1.Pro
 	username := provider.Spec.Username
 	password := ""
 	token := ""
+	relabelConfig := ""
 	headers := make(map[string]string)
 	if provider.Spec.SecretRef != nil {
 		var secret corev1.Secret
@@ -187,12 +188,17 @@ func (r *ProviderReconciler) validate(ctx context.Context, provider *v1beta1.Pro
 			username = string(u)
 		}
 
+		if r, ok := secret.Data["relabelConfig"]; ok {
+			relabelConfig = string(r)
+		}
+
 		if h, ok := secret.Data["headers"]; ok {
 			err := yaml.Unmarshal(h, headers)
 			if err != nil {
 				return fmt.Errorf("failed to read headers from secret, error: %w", err)
 			}
 		}
+
 	}
 
 	if address == "" {
@@ -220,7 +226,7 @@ func (r *ProviderReconciler) validate(ctx context.Context, provider *v1beta1.Pro
 		}
 	}
 
-	factory := notifier.NewFactory(address, proxy, username, provider.Spec.Channel, token, headers, certPool, password)
+	factory := notifier.NewFactory(address, proxy, username, provider.Spec.Channel, token, headers, certPool, password, relabelConfig)
 	if _, err := factory.Notifier(provider.Spec.Type); err != nil {
 		return fmt.Errorf("failed to initialize provider, error: %w", err)
 	}

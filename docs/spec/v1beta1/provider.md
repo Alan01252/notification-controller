@@ -415,6 +415,8 @@ spec:
 Sends notifications to [alertmanager v2 api](https://github.com/prometheus/alertmanager/blob/main/api/v2/openapi.yaml) if alert manager has basic authentication configured it is recommended to use
 secretRef and include the username:password in the address string.
 
+Multiple alertmanager addresses can be provded in a comma seperated list to support high availability.
+
 ```yaml
 apiVersion: notification.toolkit.fluxcd.io/v1beta1
 kind: Provider
@@ -424,7 +426,7 @@ metadata:
 spec:
   type: alertmanager
   # webhook address (ignored if secretRef is specified)
-  address: https://....@<alertmanager-url>/api/v2/alerts/"
+  address: https://....@<alertmanager-url-1>/api/v2/alerts/,https://....@<alertmanager-url-2>/api/v2/alerts/"
 ```
 
 When an event is triggered the provider will send a single alert with at least one annotation for alert which is the "message" found for the event.

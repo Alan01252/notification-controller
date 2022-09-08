@@ -24,26 +24,28 @@ import (
 )
 
 type Factory struct {
-	URL      string
-	ProxyURL string
-	Username string
-	Channel  string
-	Token    string
-	Headers  map[string]string
-	CertPool *x509.CertPool
-	Password string
+	URL           string
+	ProxyURL      string
+	Username      string
+	Channel       string
+	Token         string
+	Headers       map[string]string
+	CertPool      *x509.CertPool
+	Password      string
+	RelabelConfig string
 }
 
-func NewFactory(url string, proxy string, username string, channel string, token string, headers map[string]string, certPool *x509.CertPool, password string) *Factory {
+func NewFactory(url string, proxy string, username string, channel string, token string, headers map[string]string, certPool *x509.CertPool, password string, relabelConfig string) *Factory {
 	return &Factory{
-		URL:      url,
-		ProxyURL: proxy,
-		Channel:  channel,
-		Username: username,
-		Token:    token,
-		Headers:  headers,
-		CertPool: certPool,
-		Password: password,
+		URL:           url,
+		ProxyURL:      proxy,
+		Channel:       channel,
+		Username:      username,
+		Token:         token,
+		Headers:       headers,
+		CertPool:      certPool,
+		Password:      password,
+		RelabelConfig: relabelConfig,
 	}
 }
 
@@ -92,7 +94,7 @@ func (f Factory) Notifier(provider string) (Interface, error) {
 	case v1beta1.OpsgenieProvider:
 		n, err = NewOpsgenie(f.URL, f.ProxyURL, f.CertPool, f.Token)
 	case v1beta1.AlertManagerProvider:
-		n, err = NewAlertmanager(f.URL, f.ProxyURL, f.CertPool)
+		n, err = NewAlertmanager(f.URL, f.ProxyURL, f.CertPool, f.RelabelConfig)
 	case v1beta1.GrafanaProvider:
 		n, err = NewGrafana(f.URL, f.ProxyURL, f.Token, f.CertPool, f.Username, f.Password)
 	default:

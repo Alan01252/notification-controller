@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Flux authors
+Copyright 2022 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,12 +24,21 @@ import (
 	"strings"
 
 	"github.com/fluxcd/pkg/runtime/events"
+	"github.com/pkg/errors"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+	"gopkg.in/yaml.v2"
+
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/relabel"
 )
 
 type Alertmanager struct {
-	URL      string
-	ProxyURL string
-	CertPool *x509.CertPool
+	URL            string
+	ProxyURL       string
+	CertPool       *x509.CertPool
+	RelabelConfig  *relabel.Config
+	PerformRelabel bool
 }
 
 type AlertManagerAlert struct {
@@ -38,16 +47,36 @@ type AlertManagerAlert struct {
 	Annotations map[string]string `json:"annotations"`
 }
 
-func NewAlertmanager(hookURL string, proxyURL string, certPool *x509.CertPool) (*Alertmanager, error) {
-	_, err := url.ParseRequestURI(hookURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid Alertmanager URL %s: '%w'", hookURL, err)
+func NewAlertmanager(hookURL string, proxyURL string, certPool *x509.CertPool, relabelConfig string) (*Alertmanager, error) {
+
+	urls := strings.Split(hookURL, ",")
+	var wrapErr error
+	for _, alertmanagerUrl := range urls {
+		_, err := url.ParseRequestURI(alertmanagerUrl)
+		if err != nil {
+			wrapErr = errors.Wrap(wrapErr, err.Error())
+		}
+	}
+	if wrapErr != nil {
+		return nil, wrapErr
+	}
+
+	performRelabel := false
+	config := &relabel.Config{}
+	if len(relabelConfig) > 0 {
+		err := yaml.UnmarshalStrict([]byte(relabelConfig), &config)
+		if err != nil {
+			return nil, err
+		}
+		performRelabel = true
 	}
 
 	return &Alertmanager{
-		URL:      hookURL,
-		ProxyURL: proxyURL,
-		CertPool: certPool,
+		URL:            hookURL,
+		ProxyURL:       proxyURL,
+		CertPool:       certPool,
+		RelabelConfig:  config,
+		PerformRelabel: performRelabel,
 	}, nil
 }
 
@@ -66,32 +95,47 @@ func (s *Alertmanager) Post(ctx context.Context, event events.Event) error {
 		delete(event.Metadata, "summary")
 	}
 
-	var labels = make(map[string]string)
+	var alertLabels = make(map[string]string)
 	if event.Metadata != nil {
-		labels = event.Metadata
+		alertLabels = event.Metadata
 	}
-	labels["alertname"] = "Flux" + event.InvolvedObject.Kind + strings.Title(event.Reason)
-	labels["severity"] = event.Severity
-	labels["reason"] = event.Reason
-	labels["timestamp"] = event.Timestamp.String()
+	alertLabels["alertname"] = "Flux" + event.InvolvedObject.Kind + cases.Title(language.English, cases.NoLower).String(event.Reason)
+	alertLabels["severity"] = event.Severity
+	alertLabels["reason"] = event.Reason
+	alertLabels["timestamp"] = event.Timestamp.String()
 
-	labels["kind"] = event.InvolvedObject.Kind
-	labels["name"] = event.InvolvedObject.Name
-	labels["namespace"] = event.InvolvedObject.Namespace
-	labels["reportingcontroller"] = event.ReportingController
+	alertLabels["kind"] = event.InvolvedObject.Kind
+	alertLabels["name"] = event.InvolvedObject.Name
+	alertLabels["namespace"] = event.InvolvedObject.Namespace
+	alertLabels["reportingcontroller"] = event.ReportingController
+
+	promLabels := labels.FromMap(alertLabels)
+	if s.PerformRelabel {
+		res := relabel.Process(promLabels, s.RelabelConfig)
+		alertLabels = res.Map()
+	}
 
 	payload := []AlertManagerAlert{
 		{
-			Labels:      labels,
+			Labels:      alertLabels,
 			Annotations: annotations,
 			Status:      "firing",
 		},
 	}
 
-	err := postMessage(s.URL, s.ProxyURL, s.CertPool, payload)
+	urls := strings.Split(s.URL, ",")
+	var wrapErr error
+	for _, url := range urls {
+		err := postMessage(url, s.ProxyURL, s.CertPool, payload)
+		if err != nil {
+			wrapErr = errors.Wrap(wrapErr, err.Error())
+		}
 
-	if err != nil {
-		return fmt.Errorf("postMessage failed: %w", err)
 	}
+
+	if wrapErr != nil {
+		return fmt.Errorf("postMessage failed: %w", wrapErr)
+	}
+
 	return nil
 }

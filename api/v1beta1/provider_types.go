@@ -62,6 +62,11 @@ type ProviderSpec struct {
 	// +optional
 	CertSecretRef *meta.LocalObjectReference `json:"certSecretRef,omitempty"`
 
+	// Yaml for relabelling
+	// +kubebuilder:validation:Optional
+	// +optional
+	RelabelConfig string `json:"relabelConfig,omitempty"`
+
 	// This flag tells the controller to suspend subsequent events handling.
 	// Defaults to false.
 	// +optional
